@@ -1,0 +1,32 @@
+# Phishing data, model weights and upstream clones never go in git (see CLAUDE.md safety rules)
+data/
+models/
+external/
+*.safetensors
+*.onnx
+*.parquet
+*.zip
+parsed_samples_part_*
+
+# Course handouts stay local (not redistributed)
+course/
+
+# LaTeX build artifacts (keep main.pdf)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+
+# Node / extension builds
+node_modules/

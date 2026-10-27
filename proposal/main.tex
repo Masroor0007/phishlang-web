@@ -1,0 +1,103 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[compact]{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=*}
+\titlespacing*{\section}{0pt}{6pt}{3pt}
+
+% Page limit: 3 pages excluding references (course requirement). Check after every edit.
+
+\title{\vspace{-1.8em}\Large\textbf{PhishLang-Web: Auditing and Deploying\\Fully In-Browser Phishing Detection with MobileBERT}}
+\author{Masroor Ul Hasan Syed \quad Deepthi Kondreddy\\[2pt]
+\small CS 8027: Advanced Networking \& Architecture --- Research Project Proposal, Fall 2026}
+\date{\vspace{-2.5em}}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Phishing websites imitate trusted brands to steal credentials and payment data. The dominant defence, server-side blocklists such as Google Safe Browsing, protects users only after a page has been reported, crawled and confirmed. Measurements show that blocklisting can take hours and often misses evasive pages~\cite{oest2020phishtime,roy2026phishlang}. Detecting phishing \emph{on the client} avoids the blocklist delay, keeps browsing history on the device, and keeps working when the cloud is unreachable~\cite{roy2026phishlang}. Yet a longitudinal study found that the client-side anti-phishing measures deployed today detected only 14\% of phishing websites~\cite{pourmohamad2024clientside}. Recent accurate detectors rely on large, typically API-hosted language models~\cite{koide2024chatphishdetector,li2024knowphish,cao2025phishagent}, which reintroduces the cloud, its cost and its privacy exposure.
+
+This is a networking and systems problem as much as a machine-learning one. \emph{Where} inference runs (the cloud, a local native service, or the browser itself) determines detection latency, what data leaves the device, installation size, and failure modes. We study the most constrained point in this design space: a detector that runs entirely inside the browser. We ask whether it can be both deployable and accurate against current phishing.
+
+\section{Motivation and Background}
+\textbf{PhishLang.} PhishLang~\cite{roy2026phishlang} (NDSS 2026) parses a page's HTML into a compact text representation of 18 security-relevant tag types (forms, inputs, links, scripts, iframes, \ldots). It then fine-tunes MobileBERT~\cite{sun2020mobilebert}, a 25M-parameter BERT variant built for resource-limited devices, on the Phishpedia dataset~\cite{lin2021phishpedia}. The authors report 0.96 accuracy and F1, a 0.39\,s median inference time and 74\,MB of memory. They also harden the model against problem-space adversarial HTML attacks~\cite{montaruli2023raze}. Two open issues motivate our work.
+
+\textbf{(1) Deployment.} PhishLang's ``client-side'' deployment is a local Python service that a browser extension queries. It requires installing TensorFlow and PyTorch (up to 2.5\,GB), and the public installer is a Debian package. The authors considered in-browser inference with TensorFlow.js but expected it to be slower and less consistent across platforms. Since then, WebAssembly/WebGPU runtimes such as ONNX Runtime Web~\cite{onnxruntime} and Transformers.js~\cite{transformersjs} have made in-browser transformer inference practical, and 8-bit quantization shrinks BERT-family models about $4\times$ with little accuracy loss~\cite{zafrir2019q8bert,jacob2018quantization}. To our knowledge, no one has measured whether a phishing-detecting MobileBERT can run inside a standard extension with no native install.
+
+\textbf{(2) Evaluation validity.} Results in ML-for-security are known to be inflated by data snooping, sampling bias and temporally mixed splits~\cite{arp2022dos,pendlebury2019tesseract}. PhishLang trains and tests on a random split of Phishpedia, whose phishing samples carry 2019--2020 collection timestamps. Our inspection of the \emph{released} training script found two further issues:
+\begin{enumerate}[label=(\alph*)]
+  \item Pages are truncated to their first 128 tokens during training, while inference takes the maximum over 128-token sliding windows. The model is therefore trained and deployed on different views of a page.
+  \item Cross-validation indices computed on the shuffled training split are applied to the unshuffled full dataset. Replaying this logic at the paper's dataset sizes places 51--76\% of the test pages inside each fold's training data.
+\end{enumerate}
+If the published numbers were produced this way, they overstate generalization. It is therefore an open question whether PhishLang holds up on \emph{current}, previously unseen phishing. PhreshPhish~\cite{dalton2025phreshphish}, a recent benchmark with a temporally later test split, leakage filtering and realistic base rates, makes this test feasible.
+
+\section{Problem Statement}
+\emph{Can a MobileBERT phishing detector run entirely inside the user's browser (no cloud, no blocklist, no native install) while keeping the accuracy it shows under a leakage-free, temporally realistic evaluation?}
+\begin{itemize}
+  \item[\textbf{RQ1}] \textbf{Validity.} How do PhishLang's precision, recall and F1 change when the leakage is removed and the model is tested on phishing pages collected years after its training data?
+  \item[\textbf{RQ2}] \textbf{Context.} How much does the 128-token training window limit detection, and does training on the sliding-window view used at inference close the gap?
+  \item[\textbf{RQ3}] \textbf{Deployment.} What accuracy, latency, memory and size trade-offs result from running an INT8-quantized MobileBERT inside a Chrome Manifest V3 (MV3) extension? We compare it with FP32 PyTorch and with PhishLang's local-server design.
+\end{itemize}
+
+\section{Objectives and Goals}
+By the end of the semester we will deliver:
+\begin{itemize}
+  \item[\textbf{O1}] A reproducible re-evaluation of the released PhishLang model and a retrained baseline under (i)~a corrected random split and (ii)~a temporal split (2019--20 $\rightarrow$ 2024--25). We will report precision, recall, F1 and PR-AUC, including at low, realistic phishing base rates.
+  \item[\textbf{O2}] A context-window ablation: first 128 tokens vs.\ sliding-window training and inference vs.\ longer windows (up to 512 tokens).
+  \item[\textbf{O3}] \emph{PhishLang-Web}, an open-source MV3 extension that parses the live DOM and runs an INT8 ONNX MobileBERT locally via ONNX Runtime Web (WASM, plus WebGPU where available), with no network request for inference.
+  \item[\textbf{O4}] A measurement study of O3 on a desktop and a low-end laptop: agreement with PyTorch, per-page latency, peak memory and package size. Our targets are $\geq$98\% agreement with FP32, a median latency under 1\,s on a laptop CPU, and a package under 50\,MB.
+\end{itemize}
+
+\section{Approach and Methodology}
+\textbf{Phase A: Audit (RQ1--2).} PhishLang's released parsed samples form the 2019--20 corpus. The PhreshPhish test split, parsed with the same upstream parser, forms the 2024--25 corpus. We remove exact and near-duplicate pages before splitting. We evaluate the released checkpoint as-is, then retrain it with the upstream hyper-parameters on a corrected split (three seeds, mean\,$\pm$\,std). For RQ2 we retrain with each window strategy and compare them on both corpora.
+
+\textbf{Phase B: In-browser deployment (RQ3).} We export the model to ONNX, apply dynamic INT8 quantization and verify parity in Python. We then port the parser to JavaScript over the live DOM and check that it matches the Python parser on saved pages. Tokenization and inference run in an extension worker or offscreen document with ONNX Runtime Web. We time each stage (parse, tokenize, infer) and record memory and package size. The baselines are PyTorch FP32 on the CPU (approximating PhishLang's local server) and ONNX FP32.
+
+\textbf{Ethics and safety.} All phishing samples are stored HTML, handled offline in an isolated environment. We never visit live phishing URLs and collect no user data.
+
+\section{Expected Challenges}
+{\small\noindent\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.38\linewidth}X@{}}
+\toprule
+\textbf{Challenge} & \textbf{Mitigation} \\
+\midrule
+Antivirus software silently and non-randomly quarantines phishing samples (we observed this), which biases the data. & Keep samples in an isolated Linux environment; check file counts and hashes against manifests before every run. \\[2pt]
+The data comes in different formats (raw vs.\ pre-parsed HTML), and near-duplicate phishing kits inflate scores. & Use one parser for all data, spot-check its output by hand, and deduplicate on the parsed text before splitting. \\[2pt]
+INT8 quantization may degrade MobileBERT's accuracy. & Quantize the linear layers only and compare with FP32 layer by layer; fall back to FP16 on WebGPU or keep sensitive layers in FP32. \\[2pt]
+MV3 limits: short-lived service workers, a CSP that needs \texttt{wasm-unsafe-eval}, and no remotely hosted code. & Bundle the runtime and model inside the extension; run inference in an offscreen document. \\[2pt]
+The live DOM differs from the static HTML after scripts run. & Measure parser agreement; report the differences as a finding, since the live view may expose DOM-manipulation evasions. \\[2pt]
+Seven weeks and two people. & Run Phases A and B in parallel. The minimum viable result is the temporal evaluation plus an FP32 in-browser prototype. \\
+\bottomrule
+\end{tabularx}}
+
+\section{Expected Results and Significance}
+We hypothesize that the temporal evaluation will show a measurable drop from the reported 0.96 F1. This would quantify how quickly client-side language-model detectors age and how often they need retraining. We also expect an INT8 model of about a quarter of the FP32 size to run in the browser at interactive latency. That would remove PhishLang's multi-gigabyte native dependency and make the detector installable from an extension store on any Chromium browser. The broader impact is a zero-install, offline detector that keeps page content and browsing history on the device and removes blocklist latency, narrowing the gap between academic detectors and deployable browser security. We will release our corrected splits, scripts and extension.
+
+\section{Resources}
+\textbf{Hardware:} a workstation (AMD Ryzen~7 9700X, 32\,GB RAM, NVIDIA RTX~5070 12\,GB) and a low-end laptop for client-side benchmarks. \textbf{Data:} PhishLang's released parsed samples and checkpoint; PhreshPhish (CC~BY~4.0). \textbf{Software:} PyTorch, Hugging Face Transformers, ONNX Runtime (Python and Web), Transformers.js and Chrome (MV3). All are free, and no cloud budget is required.
+
+\section{Timeline}
+{\small\noindent\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Week (2026)} & \textbf{Milestone} \\
+\midrule
+Oct 26 -- Nov 1 & Proposal submitted; isolated data environment; upstream code and model reproduced. \\
+Nov 2 -- Nov 8  & Leakage-free split; retrained baseline; PhreshPhish parsed and deduplicated. \\
+Nov 9 -- Nov 15 & Temporal evaluation (RQ1); context-window ablation (RQ2). \\
+Nov 16 -- Nov 22 & ONNX export, INT8 quantization, Python parity; JavaScript parser. \\
+Nov 23 -- Nov 29 & MV3 extension prototype; parser and model parity in the browser. \\
+Nov 30 -- Dec 6 & Benchmarks on two machines (RQ3); 30-minute presentation. \\
+Dec 7 -- Dec 13 & Final report (IEEE, $\leq$8 pages); code and artifact release. \\
+\bottomrule
+\end{tabularx}}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

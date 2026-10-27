@@ -1,0 +1,49 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+
+% Final report: IEEE double-column, up to 8 pages (course requirement).
+% Builds on proposal/main.tex. references.bib starts as a copy of proposal/references.bib.
+
+\begin{document}
+
+\title{PhishLang-Web: Auditing and Deploying Fully In-Browser Phishing Detection with MobileBERT}
+
+\author{\IEEEauthorblockN{Masroor Ul Hasan Syed \qquad Deepthi Kondreddy}
+\IEEEauthorblockA{CS 8027: Advanced Networking \& Architecture, Fall 2026}}
+
+\maketitle
+
+\begin{abstract}
+% TODO: write last, from the results.
+\end{abstract}
+
+\section{Introduction}
+% Problem, why client-side, contributions list (RQ1--RQ3 answers).
+
+\section{Background and Related Work}
+% PhishLang~\cite{roy2026phishlang}, MobileBERT~\cite{sun2020mobilebert}, LLM detectors, client-side anti-phishing, evaluation pitfalls.
+
+\section{Threat Model and Problem Statement}
+
+\section{Audit of PhishLang's Evaluation (RQ1--RQ2)}
+% Data, leakage-free and temporal splits, context-window ablation.
+
+\section{In-Browser Deployment (RQ3)}
+% ONNX export, INT8 quantization, JS parser, MV3 architecture.
+
+\section{Evaluation}
+% Accuracy parity, latency, memory, package size across machines.
+
+\section{Discussion and Limitations}
+
+\section{Conclusion and Future Work}
+
+\nocite{*} % TODO: remove once the text cites its references (it lists every bib entry)
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
